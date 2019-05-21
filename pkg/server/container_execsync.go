@@ -29,6 +29,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/client-go/tools/remotecommand"
 	runtime "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 
@@ -164,16 +166,13 @@ func (c *criService) execInContainer(ctx context.Context, id string, opts execOp
 		},
 	})
 
-	var timeoutCh <-chan time.Time
-	if opts.timeout == 0 {
-		// Do not set timeout if it's 0.
-		timeoutCh = make(chan time.Time)
-	} else {
-		timeoutCh = time.After(opts.timeout)
+	execCtx := ctx
+	if opts.timeout > 0 {
+		execCtx, _ = context.WithTimeout(ctx, opts.timeout)
 	}
+
 	select {
-	case <-timeoutCh:
-		//TODO(Abhi) Use context.WithDeadline instead of timeout.
+	case <-execCtx.Done():
 		// Ignore the not found error because the process may exit itself before killing.
 		if err := process.Kill(ctx, syscall.SIGKILL); err != nil && !errdefs.IsNotFound(err) {
 			return nil, errors.Wrapf(err, "failed to kill exec %q", execID)
@@ -184,7 +183,7 @@ func (c *criService) execInContainer(ctx context.Context, id string, opts execOp
 			execID, exitRes.ExitCode(), exitRes.Error())
 		<-attachDone
 		logrus.Debugf("Stream pipe for exec process %q done", execID)
-		return nil, errors.Errorf("timeout %v exceeded", opts.timeout)
+		return nil, status.Errorf(codes.DeadlineExceeded, "timeout %v exceeded", opts.timeout)
 	case exitRes := <-exitCh:
 		code, _, err := exitRes.Result()
 		logrus.Infof("Exec process %q exits with exit code %d and error %v", execID, code, err)
