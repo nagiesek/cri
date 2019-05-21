@@ -56,13 +56,13 @@ func TestWaitSandboxStop(t *testing.T) {
 			sandboxstore.Metadata{ID: id},
 			sandboxstore.Status{State: test.state},
 		)
-		ctx := context.Background()
+		ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(test.timeout))
 		if test.cancel {
 			cancelledCtx, cancel := context.WithCancel(ctx)
 			cancel()
 			ctx = cancelledCtx
 		}
-		err := c.waitSandboxStop(ctx, sandbox, test.timeout)
+		err := c.waitSandboxStop(ctx, sandbox)
 		assert.Equal(t, test.expectErr, err != nil, desc)
 	}
 }
