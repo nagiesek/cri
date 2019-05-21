@@ -68,13 +68,13 @@ func TestWaitContainerStop(t *testing.T) {
 		)
 		assert.NoError(t, err)
 		assert.NoError(t, c.containerStore.Add(container))
-		ctx := context.Background()
+		ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(test.timeout))
 		if test.cancel {
 			cancelledCtx, cancel := context.WithCancel(ctx)
 			cancel()
 			ctx = cancelledCtx
 		}
-		err = c.waitContainerStop(ctx, container, test.timeout)
+		err = c.waitContainerStop(ctx, container)
 		assert.Equal(t, test.expectErr, err != nil, desc)
 	}
 }
